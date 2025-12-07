@@ -1,4 +1,6 @@
-@import "datepicker-config";
+@use "sass:map";
+@use "sass:color";
+@use "datepicker-config" as *;
 
 /* -------------------------------------------------
     Timepicker
@@ -58,7 +60,7 @@ $rangeThumbBg: #dedede;
 }
 
 .datepicker--time {
-  border-top: 1px solid map_get($datepickerBorderColor, nav);
+  border-top: 1px solid map.get($datepickerBorderColor, nav);
   display: flex;
   align-items: center;
 
@@ -112,7 +114,7 @@ $rangeThumbBg: #dedede;
 
   &:after {
     content: '';
-    background: map_get($datepickerBG, hover);
+    background: map.get($datepickerBG, hover);
     border-radius: $datepickerBorderRadius;
     position: absolute;
     left: -2px;
@@ -133,7 +135,7 @@ $rangeThumbBg: #dedede;
 .datepicker--time-current-ampm {
   text-transform: uppercase;
   align-self: flex-end;
-  color: map_get($datepickerTextColor, navArrows);
+  color: map.get($datepickerTextColor, navArrows);
   margin-left: 6px;
   font-size: 11px;
   margin-bottom: 1px;
@@ -169,7 +171,7 @@ $rangeThumbBg: #dedede;
 
     &:hover {
       @include thumbSelector() {
-        border-color: darken($rangeTrackBg, 15);
+        border-color: color.scale($rangeTrackBg, $lightness:-15%);
       }
     }
 
@@ -177,8 +179,8 @@ $rangeThumbBg: #dedede;
       outline: none;
 
       @include thumbSelector() {
-        background: map_get($datepickerBG, selected);
-        border-color: map_get($datepickerBG, selected);
+        background: map.get($datepickerBG, selected);
+        border-color: map.get($datepickerBG, selected);
       }
     }
 
@@ -190,7 +192,7 @@ $rangeThumbBg: #dedede;
     }
 
     &::-webkit-slider-thumb {
-      margin-top: -$rangeThumbSize/2;
+      margin-top: math.div(-$rangeThumbSize, 2);
     }
 
     //  Track
@@ -218,7 +220,7 @@ $rangeThumbBg: #dedede;
 }
 
 .datepicker--time-icon {
-  color: map_get($datepickerTextColor, navArrows);
+  color: map.get($datepickerTextColor, navArrows);
   border: 1px solid;
   border-radius: 50%;
   font-size: 16px;

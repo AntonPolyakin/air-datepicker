@@ -1,3 +1,6 @@
+@use "sass:map";
+@use "sass:color";
+
 $datepickerDayCellSize: 32px !default;
 $datepickerWidth: 250px !default;
 $datepickerMinBodyHeight: 170px !default;
@@ -23,7 +26,7 @@ $datepickerTextColor: (
 
 $datepickerBG: (
   selected: #5cc4ef,
-  selectedHover: darken(#5cc4ef, 5),
+  selectedHover: color.scale(#5cc4ef, $lightness: -5%),
   inRange: rgba(#5cc4ef, .1),
   hover: #f0f0f0
 ) !default;
@@ -47,32 +50,32 @@ $datepickerTransitionOffset: 8px !default;
 
 // Objects
 %otherMonth {
-  color: map_get($datepickerTextColor, otherMonth);
+  color: map.get($datepickerTextColor, otherMonth);
 
   &:hover {
-    color: darken(map_get($datepickerTextColor, otherMonth), 10);
+    color: color.scale(map.get($datepickerTextColor, otherMonth), $lightness:-10%);
   }
 
   &.-disabled- {
     &.-focus- {
-      color: map_get($datepickerTextColor, otherMonth);
+      color: map.get($datepickerTextColor, otherMonth);
     }
   }
 
   &.-selected- {
     color: #fff;
-    background: lighten(map_get($datepickerBG, selected), 15);
+    background: color.scale(map.get($datepickerBG, selected), $lightness: 15%);
     &.-focus- {
-      background: lighten(map_get($datepickerBG, selected), 10);
+      background: color.scale(map.get($datepickerBG, selected), $lightness: 10%);
     }
   }
   
   &.-in-range- {
-    background-color: map_get($datepickerBG, inRange);
-    color: darken(map_get($datepickerTextColor, otherMonth), 7);
+    background-color: map.get($datepickerBG, inRange);
+    color: color.scale(map.get($datepickerTextColor, otherMonth), $lightness:-7%);
 
     &.-focus- {
-      background-color: rgba(map_get($datepickerBG, inRange), .2);
+      background-color: rgba(map.get($datepickerBG, inRange), .2);
     }
   }
 

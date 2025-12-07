@@ -1,8 +1,8 @@
 var gulp = require('gulp'),
     rename = require('gulp-rename'),
-    sass = require('gulp-sass'),
+    sass = require('gulp-sass')(require('sass')),
     postcss = require('gulp-postcss'),
-    autoprefixer = require('autoprefixer')({ browsers: ['last 2 versions'] }),
+    autoprefixer = require('autoprefixer')(),
     clone = require('gulp-clone'),
     minify = require('gulp-minify-css'),
     concat = require('gulp-concat');
