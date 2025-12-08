@@ -1,4 +1,6 @@
-@import "datepicker-config";
+@use "sass:map";
+@use "sass:color";
+@use "datepicker-config" as *;
 
 /* -------------------------------------------------
     Navigation
@@ -7,7 +9,7 @@
 .datepicker--nav {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px solid map_get($datepickerBorderColor, nav);
+  border-bottom: 1px solid map.get($datepickerBorderColor, nav);
   min-height: $datepickerNavigationHeight;
   padding: $datepickerPadding;
 
@@ -30,7 +32,7 @@
   user-select: none;
 
   &:hover {
-    background: map_get($datepickerBG, hover);
+    background: map.get($datepickerBG, hover);
   }
 
   &.-disabled- {
@@ -44,7 +46,7 @@
 
   path {
     fill: none;
-    stroke: map_get($datepickerTextColor, navArrows);
+    stroke: map.get($datepickerTextColor, navArrows);
     stroke-width: 2px;
   }
 }
@@ -55,12 +57,12 @@
 
   i {
     font-style: normal;
-    color: map_get($datepickerTextColor, navArrows);
+    color: map.get($datepickerTextColor, navArrows);
     margin-left: 5px;
   }
 
   &:hover {
-    background: map_get($datepickerBG, hover);
+    background: map.get($datepickerBG, hover);
   }
 
   &.-disabled- {
@@ -75,11 +77,11 @@
 .datepicker--buttons {
   display: flex;
   padding: $datepickerPadding;
-  border-top: 1px solid map_get($datepickerBorderColor, nav);
+  border-top: 1px solid map.get($datepickerBorderColor, nav);
 }
 
 .datepicker--button {
-  color: map_get($datepickerTextColor, currentDate);
+  color: map.get($datepickerTextColor, currentDate);
   cursor: pointer;
   border-radius: $datepickerBorderRadius;
   flex: 1;
@@ -89,7 +91,7 @@
   height: 32px;
 
   &:hover {
-    color: map_get($datepickerTextColor, common);
-    background: map_get($datepickerBG, hover);
+    color: map.get($datepickerTextColor, common);
+    background: map.get($datepickerBG, hover);
   }
 }

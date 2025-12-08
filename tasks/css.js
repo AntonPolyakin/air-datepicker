@@ -1,24 +1,27 @@
-var gulp = require('gulp'),
-    rename = require('gulp-rename'),
-    sass = require('gulp-sass'),
-    postcss = require('gulp-postcss'),
-    autoprefixer = require('autoprefixer')({ browsers: ['last 2 versions'] }),
-    clone = require('gulp-clone'),
-    minify = require('gulp-minify-css'),
-    concat = require('gulp-concat');
+const gulp = require('gulp');
+const rename = require('gulp-rename');
+const sass = require('gulp-sass')(require('sass'));
+const postcss = require('gulp-postcss');
+const autoprefixer = require('autoprefixer');
+const cleanCSS = require('gulp-clean-css');
+const clone = require('gulp-clone');
 
 module.exports = function () {
-    var stream = gulp.src('src/sass/*.scss')
-        .pipe(concat('datepicker.scss'))
-        .pipe(sass().on('error', sass.logError))
-        .pipe(postcss([autoprefixer]));
+  // Compile all SCSS files separately
+  const stream = gulp.src('src/sass/datepicker.scss')
+    .pipe(sass({ outputStyle: 'expanded' }).on('error', sass.logError))
+    .pipe(postcss([autoprefixer()]));
 
-    stream.pipe(clone())
-        .pipe(minify())
-        .pipe(rename('datepicker.min.css'))
-        .pipe(gulp.dest('dist/css'));
+  // Minified version
+  stream.pipe(clone())
+    .pipe(cleanCSS({ level: 2 }))
+    .pipe(rename('datepicker.min.css'))
+    .pipe(gulp.dest('dist/css'));
 
-    stream.pipe(clone())
-        .pipe(rename('datepicker.css'))
-        .pipe(gulp.dest('dist/css'))
+  // Standard version
+  stream.pipe(clone())
+    .pipe(rename('datepicker.css'))
+    .pipe(gulp.dest('dist/css'));
+
+  return stream;
 };
