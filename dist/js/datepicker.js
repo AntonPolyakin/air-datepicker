@@ -1739,7 +1739,7 @@
                 attrs = render.attrs ? render.attrs : attrs;
             }
 
-            if (opts.range) {
+            if (opts.range && type == 'day') {
                 if (dp.isSame(minRange, date, type)) classes += ' -range-from-';
                 if (dp.isSame(maxRange, date, type)) classes += ' -range-to-';
 

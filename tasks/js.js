@@ -30,12 +30,12 @@ module.exports = function () {
         .pipe(wrap(';(function (window, $, undefined) { <%= contents %> })(window, jQuery);'))
         .pipe(header(banner, { pkg }));
 
-    // Standard version
+    // Non-minimized version
     stream
         .pipe(clone())
         .pipe(gulp.dest('dist/js'));
 
-    // Minified version
+    // Minimized version
     stream
         .pipe(clone())
         .pipe(uglify())

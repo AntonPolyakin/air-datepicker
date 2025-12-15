@@ -34,7 +34,7 @@ block content
             +example-inline('/dist')
             | directory:
         +example-code('html')
-            :code
+            code.
                 <html>
                     <head>
                         <link href="dist/css/datepicker.min.css" rel="stylesheet" type="text/css">
@@ -51,7 +51,7 @@ block content
             +example-inline('data', 'html')
             | attributes.
         +example-code('html')
-            :code
+            code.
                 <input type='text' class="datepicker-here" data-position="right top" />
         h3 Manual initialization
         +example-code('js').
@@ -66,7 +66,7 @@ block content
             +example-content
                 input(type='text', data-language='en').datepicker-here
             +example-code('html')
-                :code
+                code.
                     <input type='text' class='datepicker-here' data-language='en' />
         h3#example-multiple Selecting multiple dates
         p
@@ -79,7 +79,7 @@ block content
             +example-content
                 input(type='text' data-multiple-dates='3' data-multiple-dates-separator=', ', data-position='top left', data-language='en').datepicker-here
             +example-code('html')
-                :code
+                code.
                     <input type="text"
                            class="datepicker-here"
                            data-language='en'
@@ -97,14 +97,14 @@ block content
             +example-content
                 div.datepicker-here(data-language='en')
             +example-code('html')
-                :code
+                code.
                     <div class="datepicker-here" data-language='en'></div>
         h3#example-months Month selection
         +example
             +example-content
                 input.datepicker-here(type='text' data-min-view='months' data-view='months' data-date-format='MM yyyy' data-language='en')
             +example-code('html')
-                :code
+                code.
                     <input type="text"
                            class="datepicker-here"
                            data-language='en'
@@ -146,7 +146,7 @@ block content
             +example-content
                 input(type='text' data-range='true' data-multiple-dates-separator=' - ' data-language='en').datepicker-here
             +example-code('html')
-                :code
+                code.
                     <input type="text"
                         data-range="true"
                         data-multiple-dates-separator=" - "
@@ -241,7 +241,7 @@ block content
                     var currentDate = new Date();
                     $picker.data('datepicker').selectDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 10))
             +example-code('js')
-                :code
+                code.
                     var eventDates = [1, 10, 12, 22],
                         $picker = $('#custom-cells'),
                         $content = $('#custom-cells-events'),
@@ -310,7 +310,7 @@ block content
                         })
                     })();
             +example-code
-                :code
+                code.
                     $('#example-show-hide-callbacks').datepicker({
                         language: 'en',
                         onShow: function(dp, animationCompleted){
@@ -341,7 +341,7 @@ block content
             +example-content
                 div.datepicker-here(data-timepicker='true', data-language='en')
             +example-code
-                :code
+                code.
                     <div class="datepicker-here" data-timepicker="true" data-language='en'></div>
         p
             i More detailed info about timepicker parameters you can find in <a href='#opts-timepicker' class='nav-link'>Options</a>.
@@ -364,7 +364,7 @@ block content
             +example-content
                 input.datepicker-here(type='text' data-timepicker='true', data-time-format='hh:ii aa')
             +example-code
-                :code
+                code.
                     <div class="datepicker-here" data-timepicker="true" data-time-format='hh:ii aa'></div>
 
         h3#timeformat-actions Actions with time
@@ -433,7 +433,7 @@ block content
                         }
                     })
             +example-code
-                :code
+                code.
                     <input type='text' id='timepicker-actions-exmpl' />
                     <script>
                         // Create start date
@@ -739,7 +739,7 @@ block content
         .param
             +param-header('navTitles', 'object')
                 +example-code('js')
-                    :code
+                    code.
                         navTitles = {
                               days: 'MM, <i>yyyy</i>',
                               months: 'yyyy',
@@ -750,7 +750,7 @@ block content
                 +example-inline('dateFormat', 'js')
                 | . Missing fields will be taken from default values. Html tags are also possible.
             +example-code('js')
-                :code
+                code.
                     $('#my-datepicker').datepicker({
                            navTitles: {
                                days: '<h3>Check in date:</h3> MM, yyyy'
