@@ -5,10 +5,10 @@
  * @author t1m0n <t1m0n.tr@gmail.com>
  * @link http://t1m0n.name/air-datepicker/docs/
  * @module air-datepicker
- * @version 2.2.3-modified
+ * @version 2.3.0
  */
 ;(function (window, $, undefined) { ; (function () {
-    var VERSION = '2.2.3 (modified)',
+    var VERSION = '2.3.0',
         pluginName = 'datepicker',
         autoInitSelector = '.datepicker-here',
         $parentElement, $datepickersContainer,

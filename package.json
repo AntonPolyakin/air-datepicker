@@ -1,6 +1,6 @@
 {
   "name": "air-datepicker",
-  "version": "2.2.3-modified",
+  "version": "2.3.0",
   "scripts": {
     "build": "npx gulp build"
   },
