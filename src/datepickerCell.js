@@ -7,12 +7,14 @@ import {
     isDateSmaller,
     isDateBigger,
     isDateBetween,
+    dateDifference,
+    addDays
 } from './utils';
 
 import './datepickerCell.scss';
 
 export default class DatepickerCell {
-    constructor({type, date, dp, opts, body} = {}) {
+    constructor({ type, date, dp, opts, body } = {}) {
         this.type = type;
         this.singleType = this.type.slice(0, -1); // days -> day etc.'`
         this.date = date;
@@ -25,7 +27,7 @@ export default class DatepickerCell {
     }
 
     init() {
-        let {onRenderCell} = this.opts;
+        let { onRenderCell } = this.opts;
 
         if (onRenderCell) {
             this.customData = onRenderCell({
@@ -56,7 +58,7 @@ export default class DatepickerCell {
     }
 
     _createElement() {
-        let {year, month, fullMonth, date, fullDate} = getParsedDate(this.date);
+        let { year, month, fullMonth, date, fullDate } = getParsedDate(this.date);
         let extraAttrs = this.customData?.attrs || {};
 
         this.$cell = createElement({
@@ -73,9 +75,9 @@ export default class DatepickerCell {
 
     _getClassName() {
         let currentDate = new Date();
-        let {selectOtherMonths, selectOtherYears} = this.opts;
-        let {minDate, maxDate, isDateDisabled} = this.dp;
-        let {day} = getParsedDate(this.date);
+        let { selectOtherMonths, selectOtherYears } = this.opts;
+        let { minDate, maxDate, isDateDisabled } = this.dp;
+        let { day } = getParsedDate(this.date);
         let isOutOfMinMaxRange = this._isOutOfMinMaxRange();
         let isDisabled = isDateDisabled(this.date);
 
@@ -115,8 +117,8 @@ export default class DatepickerCell {
     }
 
     _getHtml() {
-        let {year, month, date} = getParsedDate(this.date);
-        let {showOtherMonths, showOtherYears} = this.opts;
+        let { year, month, date } = getParsedDate(this.date);
+        let { showOtherMonths, showOtherYears } = this.opts;
 
         if (this.customData?.html) {
             return this.customData.html;
@@ -133,9 +135,9 @@ export default class DatepickerCell {
     }
 
     _isOutOfMinMaxRange() {
-        let {minDate, maxDate} = this.dp;
-        let {type, date: cellDate} = this;
-        let {month, year, date} = getParsedDate(cellDate);
+        let { minDate, maxDate } = this.dp;
+        let { type, date: cellDate } = this;
+        let { month, year, date } = getParsedDate(cellDate);
         let isDay = type === consts.days;
         let isYear = type === consts.years;
 
@@ -187,7 +189,8 @@ export default class DatepickerCell {
     }
 
     _handleRangeStatus() {
-        const {selectedDates, focusDate, rangeDateTo, rangeDateFrom} = this.dp;
+        const { maxDays, minDays } = this.opts;
+        const { selectedDates, focusDate, rangeDateFrom, rangeDateTo } = this.dp;
         const selectedDatesLen = selectedDates.length;
 
         this.$cell.classList.remove('-range-from-', '-range-to-', '-in-range-');
@@ -196,23 +199,103 @@ export default class DatepickerCell {
 
         let from = rangeDateFrom;
         let to = rangeDateTo;
+        let date = this.date;
+        let type = this.type;
 
+        const diff = dateDifference;
+        const add = addDays;
+        const bigger = isDateBigger;
+        const less = isDateSmaller;
+        const same = isSameDate;
+
+        // If only one date is selected and there is a focal date
         if (selectedDatesLen === 1 && focusDate) {
-            const focusDateIsLargerThenSelected = isDateBigger(focusDate, selectedDates[0]);
+            const selectedDate = selectedDates[0];
+            const focusedDate = focusDate;
+            const selectedDateIsBeforeFocus = bigger(focusedDate, selectedDate);
 
-            from =  focusDateIsLargerThenSelected ? selectedDates[0] : focusDate;
-            to = focusDateIsLargerThenSelected ? focusDate : selectedDates[0];
+            // We define the start and end points of the time range
+            from = selectedDateIsBeforeFocus ? selectedDate : focusedDate;
+            to = selectedDateIsBeforeFocus ? focusedDate : selectedDate;
+
+            // We calculate the length of the desired range
+            const desiredRangeLength = diff(to, from) + 1;
+
+            // Adjust the range according to the restrictions
+            if (maxDays && desiredRangeLength > maxDays) {
+                // Limit by maxDays
+                if (selectedDateIsBeforeFocus) {
+                    // Focus to the right of the selected date
+                    to = add(from, maxDays - 1);
+                } else {
+                    // Focus to the left of the selected date
+                    from = add(to, -(maxDays - 1));
+                }
+            } else if (minDays && desiredRangeLength < minDays) {
+                // Expanding to minDays
+                if (selectedDateIsBeforeFocus) {
+                    // Focus to the right of the selected date
+                    to = add(from, minDays - 1);
+                } else {
+                    // Focus to the left of the selected date
+                    from = add(to, -(minDays - 1));
+                }
+            }
+
+            // If after adjusting we go beyond the focal date
+            // (for example, the focus was too far away and we truncated it by maxDays)
+            // we need to make sure the focal date is still within the range
+            // or at its boundary
+
+            // Calculate the final length of the range
+            const finalRangeLength = diff(to, from) + 1;
+
+            // Let's check if it's possible to set a range of this length.
+            if (minDays && finalRangeLength < minDays) {
+                // Cannot show range less than minDays
+                from = null;
+                to = null;
+            } else if (maxDays && finalRangeLength > maxDays) {
+                // It is not possible to show a range greater than maxDays
+                from = null;
+                to = null;
+            }
         }
 
-        let classes = classNames({
-            '-in-range-': from && to && isDateBetween(this.date, from, to),
-            '-range-from-': from && isSameDate(this.date, from, this.type),
-            '-range-to-': to && isSameDate(this.date, to, this.type)
+        let classes = {
+            '-in-range-': false,
+            '-range-from-': false,
+            '-range-to-': false
+        };
+
+        if (from && to) {
+            // Check if the current date is within the range
+            const isInRange = bigger(date, from) && less(date, to);
+
+            // Check if the current date is the start of a range
+            const isRangeFrom = same(date, from, type);
+
+            // Check if the current date is the end of a range
+            const isRangeTo = same(date, to, type);
+
+            // Installing classes
+            classes['-in-range-'] = isInRange;
+            classes['-range-from-'] = isRangeFrom;
+            classes['-range-to-'] = isRangeTo;
+        } else if (from && !to) {
+            // Only the starting point is selected
+            classes['-range-from-'] = same(date, from, type);
+        } else if (!from && to) {
+            // Only the end point is selected
+            classes['-range-to-'] = same(date, to, type);
+        }
+
+        // Adding classes to an element
+        Object.keys(classes).forEach(className => {
+            if (classes[className]) {
+                this.$cell.classList.add(className);
+            }
         });
-
-        if (classes) {
-            this.$cell.classList.add(...classes.split(' '));
-        }
     }
 
     _handleSelectedStatus() {
@@ -229,6 +312,9 @@ export default class DatepickerCell {
 
         if (datesAreSame) {
             this.focus();
+            if (this.dp.lastDateInRange) {
+                delete this.dp.lastDateInRange;
+            }
         }
     }
 
@@ -237,7 +323,7 @@ export default class DatepickerCell {
         this._handleInitialFocusStatus();
         if (this.dp.hasSelectedDates) {
             this._handleSelectedStatus();
-            if (this.dp.opts.range) {
+            if (this.dp.opts.range && this.type === consts.days) {
                 this._handleRangeStatus();
             }
         }
@@ -260,7 +346,7 @@ export default class DatepickerCell {
         if (this.isDisabled) return;
 
         this._handleSelectedStatus();
-        if (this.opts.range) {
+        if (this.dp.opts.range && this.type === consts.days) {
             this._handleRangeStatus();
         }
     }
@@ -281,7 +367,7 @@ export default class DatepickerCell {
             this.removeFocus();
         }
 
-        if (this.opts.range) {
+        if (this.dp.opts.range && this.type === consts.days) {
             this._handleRangeStatus();
         }
     }

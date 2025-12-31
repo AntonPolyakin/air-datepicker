@@ -185,6 +185,8 @@ export default {
     optsHoursStep: 'Hours step.',
     optsMinutesStep: 'Minutes step.',
     optsFixedHeight: 'Sets fixed height of the calendar. If {trueField} then there will be 6 weeks rendered in every month.',
+    optsMinDays: 'The minimum number of days that can be selected at once (when selecting a date range).',
+    optsMaxDays: 'The maximum number of days that can be selected at once (when selecting a date range).',
 
     localeTitle: 'Localization',
     localeNote: 'Starting from version 3.0.0, the calendar language must be passed as an object, instead of a string, as it was before. You can pass one of the available localizations or create your own. The available localizations are located in the {dirName} directory',

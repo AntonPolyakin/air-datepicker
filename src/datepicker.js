@@ -13,6 +13,14 @@ import {
     isDateBigger,
     isDateSmaller,
     isSameDate,
+    formatExpandedYear,
+    getTimezoneOffset,
+    getWeekYear,
+    getWeek,
+    getDayOfYear,
+    ordinal,
+    dateDifference,
+    addDays
 } from './utils';
 import DatepickerBody from './datepickerBody';
 import DatepickerNav from './datepickerNav';
@@ -40,7 +48,7 @@ export default class Datepicker {
     static buildGlobalContainer(id) {
         containerBuilt = true;
 
-        $datepickersContainer = createElement({className: id, id});
+        $datepickersContainer = createElement({ className: id, id });
         getEl('body').appendChild($datepickersContainer);
     }
     constructor(el, opts) {
@@ -48,13 +56,13 @@ export default class Datepicker {
 
         if (!this.$el) return;
 
-        this.$datepicker = createElement({className: 'air-datepicker'});
+        this.$datepicker = createElement({ className: 'air-datepicker' });
         this.opts = deepMerge({}, defaults, opts);
         this.$customContainer = this.opts.container ? getEl(this.opts.container) : false;
         this.$altField = getEl(this.opts.altField || false);
 
 
-        let {view, startDate} = this.opts;
+        let { view, startDate } = this.opts;
 
         if (!startDate) {
             this.opts.startDate = new Date();
@@ -127,12 +135,12 @@ export default class Datepicker {
             }
 
             if (keyboardNav && !onlyTimepicker) {
-                this.keyboardNav = new DatepickerKeyboard({dp: this, opts});
+                this.keyboardNav = new DatepickerKeyboard({ dp: this, opts });
             }
         }
 
         if (selectedDates) {
-            this.selectDate(selectedDates, {silent: true});
+            this.selectDate(selectedDates, { silent: true });
         }
 
         if (this.opts.visible && !treatAsInline) {
@@ -149,7 +157,7 @@ export default class Datepicker {
     }
 
     _createMobileOverlay() {
-        $datepickerOverlay = createElement({className: 'air-datepicker-overlay'});
+        $datepickerOverlay = createElement({ className: 'air-datepicker-overlay' });
         $datepickersContainer.appendChild($datepickerOverlay);
     }
 
@@ -199,7 +207,7 @@ export default class Datepicker {
             opts
         });
 
-        this.nav = new DatepickerNav({dp, opts});
+        this.nav = new DatepickerNav({ dp, opts });
 
         if (timepicker) {
             this._addTimepicker();
@@ -242,23 +250,23 @@ export default class Datepicker {
     }
 
     _createMinMaxDates() {
-        let {minDate, maxDate} = this.opts;
+        let { minDate, maxDate } = this.opts;
 
         this.minDate = minDate ? createDate(minDate) : false;
         this.maxDate = maxDate ? createDate(maxDate) : false;
     }
 
     _addTimepicker() {
-        this.$timepicker = createElement({className: 'air-datepicker--time'});
+        this.$timepicker = createElement({ className: 'air-datepicker--time' });
         this.$datepicker.appendChild(this.$timepicker);
-        this.timepicker = new DatepickerTime({dp: this, opts: this.opts});
+        this.timepicker = new DatepickerTime({ dp: this, opts: this.opts });
         this.$timepicker.appendChild(this.timepicker.$el);
     }
 
     _addButtons() {
-        this.$buttons = createElement({className: 'air-datepicker--buttons'});
+        this.$buttons = createElement({ className: 'air-datepicker--buttons' });
         this.$datepicker.appendChild(this.$buttons);
-        this.buttons = new DatepickerButtons({dp: this, opts: this.opts});
+        this.buttons = new DatepickerButtons({ dp: this, opts: this.opts });
         this.$buttons.appendChild(this.buttons.$el);
     }
 
@@ -269,9 +277,9 @@ export default class Datepicker {
     }
 
     _buildBaseHtml() {
-        let {inline} = this.opts;
+        let { inline } = this.opts;
 
-        if  (this.elIsInput) {
+        if (this.elIsInput) {
             if (!inline) {
                 this.$container.appendChild(this.$datepicker);
             } else {
@@ -283,13 +291,13 @@ export default class Datepicker {
 
         this.$datepicker.innerHTML = baseTemplate;
 
-        this.$content = getEl('.air-datepicker--content',  this.$datepicker);
+        this.$content = getEl('.air-datepicker--content', this.$datepicker);
         this.$pointer = getEl('.air-datepicker--pointer', this.$datepicker);
         this.$nav = getEl('.air-datepicker--navigation', this.$datepicker);
     }
 
     _handleLocale() {
-        let {locale, dateFormat, firstDay, timepicker, onlyTimepicker, timeFormat, dateTimeSeparator} = this.opts;
+        let { locale, dateFormat, firstDay, timepicker, onlyTimepicker, timeFormat, dateTimeSeparator } = this.opts;
         this.locale = deepCopy(locale);
 
         if (dateFormat) {
@@ -301,7 +309,7 @@ export default class Datepicker {
             this.locale.timeFormat = timeFormat;
         }
 
-        let {timeFormat: timeFormatValidated} = this.locale;
+        let { timeFormat: timeFormatValidated } = this.locale;
 
         if (firstDay !== '') {
             this.locale.firstDay = firstDay;
@@ -327,7 +335,7 @@ export default class Datepicker {
         pos = pos.split(' ');
         let main = pos[0],
             sec = pos[1],
-            classes = `air-datepicker -${main}-${sec}- -from-${main}-`;
+            classes = `air-datepicker -${main}${(sec ? '-' + sec : '')}- -from-${main}-`;
 
         this.$datepicker.classList.add(...classes.split(' '));
     }
@@ -341,7 +349,7 @@ export default class Datepicker {
     }
 
     _limitViewDateByMaxMinDates() {
-        let {viewDate, minDate, maxDate} = this;
+        let { viewDate, minDate, maxDate } = this;
 
         if (maxDate && isDateBigger(viewDate, maxDate)) {
             this.setViewDate(maxDate);
@@ -363,48 +371,128 @@ export default class Datepicker {
             decade = getDecade(date),
             replacer = Datepicker.replacer;
 
-        let formats = {
-            // Time in ms
-            T: date.getTime(),
+        const formats = {
+            // Unix
+            x: date.getTime(),
+            X: Math.floor(date.getTime() / 1000),
 
-            // Minutes
-            m: parsedDate.minutes,
-            mm: parsedDate.fullMinutes,
+            // Year
+            Y: parsedDate.year,
+            YY: String(parsedDate.year).slice(-2),
+            YYYY: parsedDate.year,
+            YYYYYY: formatExpandedYear(parsedDate.year),
+            y: parsedDate.year > 0 ? parsedDate.year : 1 - parsedDate.year,
 
-            // Hours
-            h: parsedDate.hours12,
-            hh: parsedDate.fullHours12,
-            H: parsedDate.hours,
-            HH: parsedDate.fullHours,
+            // Era
+            N: parsedDate.year > 0 ? 'AD' : 'BC',
+            NN: parsedDate.year > 0 ? 'AD' : 'BC',
+            NNN: parsedDate.year > 0 ? 'AD' : 'BC',
+            NNNN: parsedDate.year > 0 ? 'Anno Domini' : 'Before Christ',
+            NNNNN: parsedDate.year > 0 ? 'AD' : 'BC',
 
-            // Day period
-            aa: dayPeriod,
-            AA: dayPeriod.toUpperCase(),
-
-            // Day of week
-            E: locale.daysShort[parsedDate.day],
-            EEEE: locale.days[parsedDate.day],
-
-            // Date of month
-            d: parsedDate.date,
-            dd: parsedDate.fullDate,
-
-            // Months
+            // Month
             M: parsedDate.month + 1,
+            Mo: ordinal(parsedDate.month + 1),
             MM: parsedDate.fullMonth,
             MMM: locale.monthsShort[parsedDate.month],
             MMMM: locale.months[parsedDate.month],
 
-            // Years
-            yy: parsedDate.year.toString().slice(-2),
-            yyyy: parsedDate.year,
-            yyyy1: decade[0],
-            yyyy2: decade[1]
+            // Quarter
+            Q: Math.ceil((parsedDate.month + 1) / 3),
+            Qo: ordinal(Math.ceil((parsedDate.month + 1) / 3)),
+
+            // Day of month
+            D: parsedDate.date,
+            Do: ordinal(parsedDate.date),
+            DD: parsedDate.fullDate,
+
+            // Day of year
+            DDD: getDayOfYear(date),
+            DDDo: ordinal(getDayOfYear(date)),
+            DDDD: String(getDayOfYear(date)).padStart(3, '0'),
+
+            // Day of week
+            d: parsedDate.day,
+            do: ordinal(parsedDate.day),
+            dd: locale.daysMin[parsedDate.day],
+            ddd: locale.daysShort[parsedDate.day],
+            dddd: locale.days[parsedDate.day],
+
+            // ISO day
+            E: parsedDate.day === 0 ? 7 : parsedDate.day,
+
+            // Week
+            w: getWeek(date),
+            wo: ordinal(getWeek(date)),
+            ww: String(getWeek(date)).padStart(2, '0'),
+
+            W: getWeek(date),
+            Wo: ordinal(getWeek(date)),
+            WW: String(getWeek(date)).padStart(2, '0'),
+
+            gg: String(getWeekYear(date)).slice(-2),
+            gggg: getWeekYear(date),
+            GG: String(getWeekYear(date)).slice(-2),
+            GGGG: getWeekYear(date),
+
+            // Hour
+            H: parsedDate.hours,
+            HH: parsedDate.fullHours,
+            h: parsedDate.hours12,
+            hh: parsedDate.fullHours12,
+            k: parsedDate.hours === 0 ? 24 : parsedDate.hours,
+            kk: String(parsedDate.hours === 0 ? 24 : parsedDate.hours).padStart(2, '0'),
+
+            // Minute / Second
+            m: parsedDate.minutes,
+            mm: parsedDate.fullMinutes,
+            s: parsedDate.seconds,
+            ss: parsedDate.fullSeconds,
+
+            // Fractional
+            S: Math.floor(parsedDate.milliseconds / 100),
+            SS: Math.floor(parsedDate.milliseconds / 10),
+            SSS: parsedDate.milliseconds,
+
+            // AM/PM
+            A: parsedDate.dayPeriod.toUpperCase(),
+            a: parsedDate.dayPeriod,
+
+            // Timezone
+            Z: getTimezoneOffset(date, true),
+            ZZ: getTimezoneOffset(date, false)
         };
 
+        const tokenAliases = {
+            yyyy: 'YYYY',
+            yy: 'YY'
+        };
 
-        for (let [format, data] of Object.entries(formats)) {
-            result = replacer(result, getWordBoundaryRegExp(format), data);
+        function resolveToken(token, formats) {
+            if (formats[token] !== undefined) {
+                return token;
+            }
+
+            if (tokenAliases[token] && formats[tokenAliases[token]] !== undefined) {
+                return tokenAliases[token];
+            }
+
+            return null;
+        }
+
+        const tokens = Object.keys(formats)
+            .concat(Object.keys(tokenAliases))
+            .sort((a, b) => b.length - a.length);
+
+        for (const token of tokens) {
+            const resolved = resolveToken(token, formats);
+            if (!resolved) continue;
+
+            const reg = getWordBoundaryRegExp(token);
+
+            if (reg.test(result)) {
+                result = replacer(result, reg, formats[resolved]);
+            }
         }
 
         return result;
@@ -414,7 +502,7 @@ export default class Datepicker {
      * Changes month, year, decade to next period
      */
     next = () => {
-        let {year, month} = this.parsedViewDate;
+        let { year, month } = this.parsedViewDate;
 
         switch (this.currentView) {
             case consts.days:
@@ -433,7 +521,7 @@ export default class Datepicker {
      * Changes month, year, decade to prev period
      */
     prev = () => {
-        let {year, month} = this.parsedViewDate;
+        let { year, month } = this.parsedViewDate;
 
         switch (this.currentView) {
             case consts.days:
@@ -466,34 +554,40 @@ export default class Datepicker {
      * @example selectDate(new Date()).then(() => {console.log(dp.$el.value)})
      */
     selectDate(date, params = {}) {
-        let {currentView, parsedViewDate, selectedDates} = this;
-        let {updateTime, silent} = params;
-        let {
+        const { currentView, parsedViewDate, selectedDates } = this;
+        const { updateTime, silent } = params;
+        const {
             moveToOtherMonthsOnSelect,
             moveToOtherYearsOnSelect,
             multipleDates,
             range,
             autoClose,
             onBeforeSelect,
+            minDays,
+            maxDays
         } = this.opts;
-        let selectedDaysLen = selectedDates.length;
+
+        // New variable for setting the second date from the range
+        if (this.allowExtendRange === undefined) {
+            this.allowExtendRange = true; // Default true
+        }
+
+        const selectedDaysLen = selectedDates.length;
         let newViewDate;
 
         if (Array.isArray(date)) {
             date.forEach((d) => {
                 this.selectDate(d, params);
             });
-
             return new Promise((resolve) => {
                 setTimeout(resolve);
             });
         }
 
         date = createDate(date);
-
         if (!(date instanceof Date)) return;
 
-        if (onBeforeSelect && !silent && !onBeforeSelect({date, datepicker: this})) {
+        if (onBeforeSelect && !silent && !onBeforeSelect({ date, datepicker: this })) {
             return Promise.resolve();
         }
 
@@ -521,30 +615,136 @@ export default class Datepicker {
                 selectedDates.push(date);
             }
         } else if (range) {
-            switch (selectedDaysLen) {
+            // For range: selectedDates always must be an array of 2 dates 
+            // [rangeDateFrom, rangeDateTo] - even if this is the same data
+
+            switch (selectedDates.length) {
+                case 0:
+                    // No dates selected - starting a new range
+                    this.rangeDateFrom = date;
+                    this.rangeDateTo = null;
+                    this.selectedDates = [date];
+                    break;
+
                 case 1:
-                    selectedDates.push(date);
-                    // Need to define this manually if call selectDate programmatically
-                    if (!this.rangeDateTo) {
+                    // There is one selected date (start of range)
+                    const firstDate = selectedDates[0];
+                    const isSameDay = isSameDate(date, firstDate);
+
+                    // Delete range by clicking on the same date again
+                    if (isSameDay) {
+                        // If minDays > 1, then always delete the range on the second click
+                        if (minDays > 1) {
+                            this.unselectDate(firstDate);
+                            return Promise.resolve();
+                        }
+                        // If minDays = 1, check the state
+                        else if (minDays === 1) {
+                            // If the second date is already set (range of one date)
+                            if (this.selectedDates.length === 2) {
+                                // Delete the entire range
+                                this.unselectDate(firstDate);
+                                if (this.selectedDates[1]) {
+                                    this.unselectDate(this.selectedDates[1]);
+                                }
+                                return Promise.resolve();
+                            } else {
+                                // Set a range of one date
+                                this.rangeDateTo = date;
+                                this.selectedDates = [firstDate, date];
+                            }
+                        }
+                    } else {
+                        // Normal second date selection
+                        const rangeLength = Math.abs(dateDifference(date, firstDate)) + 1;
+
+                        // Checking the minDays and maxDays limits
+                        let isValidRange = true;
+
+                        if (minDays && rangeLength < minDays) {
+                            isValidRange = false;
+                            if (!silent) {
+                                console.log(`The range should not be less than ${minDays} days`);
+                            }
+                        }
+
+                        if (maxDays && rangeLength > maxDays) {
+                            isValidRange = false;
+                            if (!silent) {
+                                console.log(`The range should not exceed ${maxDays} days`);
+                            }
+                        }
+
+                        if (!isValidRange) {
+                            // If allowExtendRange = true, we try to find the nearest valid date
+                            if (this.allowExtendRange && (rangeLength < minDays || rangeLength > maxDays)) {
+                                // We are looking for the nearest acceptable date in the desired direction
+                                let targetDate;
+                                const isSecondDateAfterFirst = isDateBigger(date, firstDate);
+
+                                if (rangeLength < minDays) {
+                                    // Need to increase range to minDays
+                                    targetDate = isSecondDateAfterFirst
+                                        ? addDays(firstDate, minDays - 1)
+                                        : addDays(firstDate, -(minDays - 1));
+                                } else if (rangeLength > maxDays) {
+                                    // The range needs to be reduced to maxDays
+                                    targetDate = isSecondDateAfterFirst
+                                        ? addDays(firstDate, maxDays - 1)
+                                        : addDays(firstDate, -(maxDays - 1));
+                                }
+
+                                // Check that targetDate is not equal to the current date
+                                if (targetDate && !isSameDate(targetDate, date)) {
+                                    return this.selectDate(targetDate, { ...params, silent: true });
+                                }
+                            }
+
+                            return Promise.resolve();
+                        }
+
+                        // All checks have been passed, we are setting the second date
                         this.rangeDateTo = date;
+
+                        // Sort dates if the second date is earlier than the first.
+                        if (isDateBigger(this.rangeDateFrom, this.rangeDateTo)) {
+                            [this.rangeDateTo, this.rangeDateFrom] = [this.rangeDateFrom, this.rangeDateTo];
+                        }
+
+                        this.selectedDates = [this.rangeDateFrom, this.rangeDateTo];
                     }
-                    // Swap dates if they were selected via dp.selectDate() and second date was smaller then first
-                    if (isDateBigger(this.rangeDateFrom, this.rangeDateTo)) {
-                        this.rangeDateTo = this.rangeDateFrom;
-                        this.rangeDateFrom = date;
-                    }
-                    this.selectedDates = [this.rangeDateFrom, this.rangeDateTo];
                     break;
+
                 case 2:
-                    this.selectedDates = [date];
-                    this.rangeDateFrom = date;
-                    this.rangeDateTo = '';
+                    // There is already a full range
+                    const isClickingOnFrom = isSameDate(date, this.rangeDateFrom);
+                    const isClickingOnTo = isSameDate(date, this.rangeDateTo);
+
+                    if (isClickingOnFrom || isClickingOnTo) {
+                        // Click on an existing date range
+                        if (minDays === 1 && isSameDate(this.rangeDateFrom, this.rangeDateTo)) {
+                            // A range of one date - delete on the third click
+                            this.unselectDate(this.rangeDateFrom);
+                            this.unselectDate(this.rangeDateTo);
+                        } else {
+                            // Range of different dates - delete and start a new one
+                            this.unselectDate(this.rangeDateFrom);
+                            this.unselectDate(this.rangeDateTo);
+                            // We start a new range from this date
+                            this.rangeDateFrom = date;
+                            this.rangeDateTo = null;
+                            this.selectedDates = [date];
+                        }
+                    } else {
+                        // Click on another date to start a new range.
+                        this.rangeDateFrom = date;
+                        this.rangeDateTo = null;
+                        this.selectedDates = [date];
+                    }
                     break;
-                default:
-                    this.selectedDates = [date];
-                    this.rangeDateFrom = date;
             }
         } else {
+            // No range mode
             this.selectedDates = [date];
         }
 
@@ -554,6 +754,7 @@ export default class Datepicker {
             date,
             updateTime
         });
+
         this._updateLastSelectedDate(date);
 
         if (autoClose && !this.timepickerIsActive && this.visible) {
@@ -570,35 +771,92 @@ export default class Datepicker {
     }
 
     unselectDate(date) {
-        let selected = this.selectedDates,
-            _this = this;
-
+        let _this = this;
+        let selectedDates = _this.selectedDates || [];
         date = createDate(date);
+        if (!(date instanceof Date)) return false;
 
-        if (!(date instanceof Date)) return;
+        const { minDays, maxDays, range } = _this.opts;
 
-        return selected.some((curDate, i) => {
-            if (isSameDate(curDate, date)) {
-                selected.splice(i, 1);
+        if (range) {
+            // For range mode: remove the entire date from selectedDates
+            const newSelectedDates = selectedDates.filter(curDate =>
+                !isSameDate(curDate, date)
+            );
 
-                if (!_this.selectedDates.length) {
-                    _this.rangeDateFrom = '';
-                    _this.rangeDateTo = '';
-                    _this._updateLastSelectedDate(false);
-                } else {
-                    // Assume that if unselectDate has been called, then there is only one selected date
-                    // in range mode, so we need to reset rangeDateTo
-                    _this.rangeDateTo = '';
-                    _this.rangeDateFrom = selected[0];
+            // Updating selectedDates
+            _this.selectedDates = newSelectedDates;
 
-                    _this._updateLastSelectedDate(_this.selectedDates[_this.selectedDates.length - 1]);
+            // Update rangeDateFrom and rangeDateTo based on the remaining dates
+            if (newSelectedDates.length === 0) {
+                _this.rangeDateFrom = '';
+                _this.rangeDateTo = '';
+                _this._updateLastSelectedDate(false);
+            } else if (newSelectedDates.length === 1) {
+                _this.rangeDateFrom = newSelectedDates[0];
+                _this.rangeDateTo = '';
+                _this._updateLastSelectedDate(newSelectedDates[0]);
+            } else if (newSelectedDates.length === 2) {
+                _this.rangeDateFrom = newSelectedDates[0];
+                _this.rangeDateTo = newSelectedDates[1];
+
+                // sort if necessary.
+                if (isDateBigger(_this.rangeDateFrom, _this.rangeDateTo)) {
+                    [_this.rangeDateTo, _this.rangeDateFrom] = [_this.rangeDateFrom, _this.rangeDateTo];
+                    _this.selectedDates = [_this.rangeDateFrom, _this.rangeDateTo];
                 }
 
-                this.trigger(consts.eventChangeSelectedDate, {action: consts.actionUnselectDate,  date});
-
-                return true;
+                _this._updateLastSelectedDate(newSelectedDates[1]);
             }
-        });
+
+            _this.trigger(consts.eventChangeSelectedDate, {
+                action: consts.actionUnselectDate,
+                date
+            });
+            return true;
+        } else {
+            // No range mode
+            return selectedDates.some(function (curDate, i) {
+                if (isSameDate(curDate, date)) {
+                    // if maxDays === 1 && range → remove both dates
+                    if (maxDays === 1 && range) {
+                        selectedDates.splice(i, 2);
+                    } else {
+                        selectedDates.splice(i, 1);
+                    }
+
+                    // Apply minDays logic
+                    if (selectedDates.length >= minDays) {
+                        selectedDates = selectedDates.slice();
+                    } else {
+                        selectedDates = [];
+                    }
+
+                    // Reset range & lastSelectedDate
+                    if (!selectedDates.length) {
+                        _this.rangeDateFrom = '';
+                        _this.rangeDateTo = '';
+                        _this._updateLastSelectedDate(false);
+                    } else {
+                        _this.rangeDateFrom = selectedDates[0] || '';
+                        _this.rangeDateTo =
+                            range && selectedDates.length > 1
+                                ? selectedDates[1]
+                                : '';
+                        _this._updateLastSelectedDate(
+                            selectedDates[selectedDates.length - 1]
+                        );
+                    }
+
+                    _this.trigger(consts.eventChangeSelectedDate, {
+                        action: consts.actionUnselectDate,
+                        date
+                    });
+                    return true;
+                }
+                return false;
+            });
+        }
     }
 
     replaceDate(selectedDate, newDate) {
@@ -635,7 +893,7 @@ export default class Datepicker {
         this.rangeDateTo = false;
         this.lastSelectedDate = false;
 
-        this.trigger(consts.eventChangeSelectedDate, {action: consts.actionUnselectDate, silent: params.silent});
+        this.trigger(consts.eventChangeSelectedDate, { action: consts.actionUnselectDate, silent: params.silent });
 
         return new Promise((resolve) => {
             setTimeout(resolve);
@@ -643,7 +901,7 @@ export default class Datepicker {
     }
 
     show() {
-        let {onShow, isMobile} = this.opts;
+        let { onShow, isMobile } = this.opts;
         this._cancelScheduledCall();
 
         if (!this.visible && !this.hideAnimation) {
@@ -665,7 +923,7 @@ export default class Datepicker {
     }
 
     hide() {
-        let {onHide, isMobile} = this.opts;
+        let { onHide, isMobile } = this.opts;
         let hasTransition = this._hasTransition();
 
         this.visible = false;
@@ -685,7 +943,7 @@ export default class Datepicker {
             if (
                 !this.customHide &&
                 ((isAnimationCompleted && hasTransition) ||
-                (!isAnimationCompleted && !hasTransition))
+                    (!isAnimationCompleted && !hasTransition))
             ) {
                 this._finishHide();
             }
@@ -717,7 +975,7 @@ export default class Datepicker {
             return;
         }
 
-        let  {isMobile} = this.opts;
+        let { isMobile } = this.opts;
 
         let vpDims = this.$el.getBoundingClientRect(),
             dims = this.$el.getBoundingClientRect(),
@@ -725,7 +983,8 @@ export default class Datepicker {
             $elOffset = this.$el.offsetParent,
             selfDims = this.$datepicker.getBoundingClientRect(),
             pos = position.split(' '),
-            top, left,
+            top = 0,
+            left = 0,
             scrollTop = window.scrollY,
             scrollLeft = window.scrollX,
             offset = this.opts.offset,
@@ -768,31 +1027,31 @@ export default class Datepicker {
 
         switch (main) {
             case 'top':
-                top = dims.top - selfDims.height - offset;
+                top = -selfDims.height - offset;
                 break;
             case 'right':
-                left = dims.left + dims.width + offset;
+                left = dims.width + offset;
                 break;
             case 'bottom':
-                top = dims.top + dims.height + offset;
+                top = dims.height + offset;
                 break;
             case 'left':
-                left = dims.left - selfDims.width - offset;
+                left = -selfDims.width - offset;
                 break;
         }
 
         switch (secondary) {
             case 'top':
-                top = dims.top;
+                top = 0;
                 break;
             case 'right':
-                left = dims.left + dims.width - selfDims.width;
+                left = dims.width - selfDims.width;
                 break;
             case 'bottom':
-                top = dims.top + dims.height - selfDims.height;
+                top = dims.height - selfDims.height;
                 break;
             case 'left':
-                left = dims.left;
+                left = 0;
                 break;
             case 'center':
                 if (/left|right/.test(main)) {
@@ -806,8 +1065,8 @@ export default class Datepicker {
     }
 
     _setInputValue = () => {
-        let {opts, $altField, locale: {dateFormat}} = this,
-            {altFieldDateFormat, altField} = opts;
+        let { opts, $altField, locale: { dateFormat } } = this,
+            { altFieldDateFormat, altField } = opts;
 
         if (altField && $altField) {
             $altField.value = this._getInputValue(altFieldDateFormat);
@@ -818,8 +1077,8 @@ export default class Datepicker {
     }
 
     _getInputValue = (dateFormat) => {
-        let {selectedDates, opts} = this,
-            {multipleDates, multipleDatesSeparator} = opts;
+        let { selectedDates, opts } = this,
+            { multipleDates, multipleDatesSeparator } = opts;
 
         if (!selectedDates.length) return '';
 
@@ -842,7 +1101,7 @@ export default class Datepicker {
         let dates = [],
             formattedDates = [],
             datepicker = this,
-            {selectedDates, locale, opts: {onSelect, multipleDates, range}} = datepicker,
+            { selectedDates, locale, opts: { onSelect, multipleDates, range } } = datepicker,
             isMultiple = multipleDates || range,
             formatIsFunction = typeof locale.dateFormat === 'function';
 
@@ -883,11 +1142,11 @@ export default class Datepicker {
     }
 
     _handleAlreadySelectedDates(alreadySelectedDate, cellDate) {
-        let {selectedDates, rangeDateFrom, rangeDateTo} = this;
-        let {range, toggleSelected} = this.opts;
+        let { selectedDates, rangeDateFrom, rangeDateTo } = this;
+        let { range, toggleSelected } = this.opts;
         let selectedDatesLen = selectedDates.length;
         let isFunc = typeof toggleSelected === 'function';
-        let shouldToggle = isFunc ? toggleSelected({datepicker: this, date: cellDate}) : toggleSelected;
+        let shouldToggle = isFunc ? toggleSelected({ datepicker: this, date: cellDate }) : toggleSelected;
         let datesAreSame = Boolean(range && selectedDatesLen === 1 && alreadySelectedDate);
         // If range=true and user selects same date, then add new instance of same date to selectedDates
         // to be able to change time independently on both dates
@@ -902,6 +1161,14 @@ export default class Datepicker {
                 // Don't change lastSelectedDate if we have 2 same selected dates
                 if (selectedDatesLen === 2 && isSameDate(rangeDateFrom, rangeDateTo)) {
                     return;
+                }
+            } else {
+                if (this.selectedDates.length != 2) {
+                    this.selectDate(cellDateCopy);
+                    shouldToggle = false;
+                } else {
+                    this.unselectDate(cellDateCopy);
+                    this.unselectDate(alreadySelectedDate);
                 }
             }
         }
@@ -939,7 +1206,7 @@ export default class Datepicker {
             cb && cb(true);
         };
 
-        this.$datepicker.addEventListener('transitionend', this._onTransitionEnd, {once: true});
+        this.$datepicker.addEventListener('transitionend', this._onTransitionEnd, { once: true });
     }
 
     _cancelScheduledCall = () => {
@@ -958,10 +1225,10 @@ export default class Datepicker {
         if (isSameDate(date, this.viewDate)) return;
         let oldViewDate = this.viewDate;
         this.viewDate = date;
-        let {onChangeViewDate} = this.opts;
+        let { onChangeViewDate } = this.opts;
 
         if (onChangeViewDate) {
-            let {month, year} = this.parsedViewDate;
+            let { month, year } = this.parsedViewDate;
             onChangeViewDate({
                 month,
                 year,
@@ -1046,7 +1313,7 @@ export default class Datepicker {
 
         if (!(cellDate instanceof Date)) return;
 
-        let {year, month, date} = getParsedDate(cellDate);
+        let { year, month, date } = getParsedDate(cellDate);
 
         let yearQuery = `[data-year="${year}"]`,
             monthQuery = `[data-month="${month}"]`,
@@ -1069,7 +1336,7 @@ export default class Datepicker {
     destroy = () => {
         if (this.isDestroyed) return;
 
-        let {showEvent, isMobile} = this.opts;
+        let { showEvent, isMobile } = this.opts;
 
         let parent = this.$datepicker.parentNode;
         if (parent) {
@@ -1111,11 +1378,11 @@ export default class Datepicker {
      */
     update = (newOpts = {}, params = {}) => {
         let prevOpts = deepMerge({}, this.opts);
-        let {silent} = params;
+        let { silent } = params;
 
         deepMerge(this.opts, newOpts);
 
-        let {timepicker, buttons, range, selectedDates, isMobile} = this.opts;
+        let { timepicker, buttons, range, selectedDates, isMobile } = this.opts;
         let shouldUpdateDOM = this.visible || this.treatAsInline;
 
         this._createMinMaxDates();
@@ -1124,11 +1391,11 @@ export default class Datepicker {
 
         if (selectedDates) {
             this.selectedDates = [];
-            this.selectDate(selectedDates, {silent});
+            this.selectDate(selectedDates, { silent });
         }
 
         if (newOpts.view) {
-            this.setCurrentView(newOpts.view, {silent});
+            this.setCurrentView(newOpts.view, { silent });
         }
 
         this._setInputValue();
@@ -1246,19 +1513,19 @@ export default class Datepicker {
     // -------------------------------------------------
 
     isOtherMonth = (date) => {
-        let {month} = getParsedDate(date);
+        let { month } = getParsedDate(date);
 
         return month !== this.parsedViewDate.month;
     }
 
     isOtherYear = (date) => {
-        let {year} = getParsedDate(date);
+        let { year } = getParsedDate(date);
 
         return year !== this.parsedViewDate.year;
     }
 
     isOtherDecade = (date) => {
-        let {year} = getParsedDate(date);
+        let { year } = getParsedDate(date);
         let [firstDecadeYear, lastDecadeYear] = getDecade(this.viewDate);
 
         return year < firstDecadeYear || year > lastDecadeYear;
@@ -1267,7 +1534,7 @@ export default class Datepicker {
     //  Subscription events
     // -------------------------------------------------
 
-    _onChangeSelectedDate = ({silent}) => {
+    _onChangeSelectedDate = ({ silent }) => {
         // Use timeout here for wait for all changes that could be made to selected date (e.g. timepicker adds time)
         setTimeout(() => {
             this._setInputValue();
@@ -1277,7 +1544,7 @@ export default class Datepicker {
         });
     }
 
-    _onChangeFocusedDate = (date, {viewDateTransition} = {}) => {
+    _onChangeFocusedDate = (date, { viewDateTransition } = {}) => {
         if (!date) return;
         let shouldPerformTransition = false;
 
@@ -1290,14 +1557,14 @@ export default class Datepicker {
         }
 
         if (this.opts.onFocus) {
-            this.opts.onFocus({datepicker: this, date});
+            this.opts.onFocus({ datepicker: this, date });
         }
 
     }
 
-    _onChangeTime = ({hours, minutes}) => {
+    _onChangeTime = ({ hours, minutes }) => {
         let today = new Date();
-        let {lastSelectedDate, opts: {onSelect}} = this;
+        let { lastSelectedDate, opts: { onSelect } } = this;
         let targetDate = lastSelectedDate;
 
         if (!lastSelectedDate) {
@@ -1413,7 +1680,7 @@ export default class Datepicker {
      * @param {Date} date
      */
     getClampedDate = (date) => {
-        let {minDate, maxDate} = this,
+        let { minDate, maxDate } = this,
             newDate = date;
 
         if (maxDate && isDateBigger(date, maxDate)) {

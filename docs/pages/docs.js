@@ -406,6 +406,12 @@ function Docs({} = {}) {
                                 <Param name={'minutesStep'} type={'number'} defaultValue={'1'}>
                                     <Paragraph id={'optsMinutesStep'}/>
                                 </Param>
+                                <Param name={'minDays'} type={'number'} defaultValue={'1'}>
+                                    <Paragraph id={'optsMinDays'}/>
+                                </Param>
+                                <Param name={'maxDays'} type={'number'} defaultValue={'0'}>
+                                    <Paragraph id={'optsMaxDays'}/>
+                                </Param>
                             </Param.List>
                         </Section>
                         <Section title='localeTitle'>
