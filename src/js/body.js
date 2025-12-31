@@ -197,13 +197,13 @@
                 classes += ' -focus-';
                 if (parent.lastDateInRange) delete parent.lastDateInRange;
             }
-            if (parent._isTemporary(date, type)) {
-                if (parent._isSelected(date, type)) {
-                    classes += ' -selected-';
-                } else {
-                    classes += ' -in-range-';
-                }
+
+            if (parent._isSelected(date, type)) {
+                classes += ' -selected-';
+            } else {
+                classes += ' -in-range-';
             }
+
             if (!parent._isInRange(date, type) || render.disabled) classes += ' -disabled-';
 
             return {
@@ -249,7 +249,7 @@
             var attrsStr = Object.keys(content.attrs).reduce((prev, cur) => {
                 return prev + cur + '="' + content.attrs[cur] + '" '
             }, '');
-            
+
             return '<div class="' + content.classes + '" ' +
                 'data-date="' + date.getDate() + '" ' +
                 'data-month="' + date.getMonth() + '" ' +
@@ -367,7 +367,7 @@
             }
             // Select date if min view is reached
             var selectedDate = dp.lastDateInRange ? dp.lastDateInRange : new Date(year, month, date),
-                alreadySelected = this.d._isTemporary(selectedDate, this.d.cellType);
+                alreadySelected = this.d._isSelected(selectedDate, this.d.cellType);
 
             if (!alreadySelected) {
                 dp._trigger('clickCell', selectedDate);

@@ -853,6 +853,22 @@ block content
             +param-header('minutesStep', 'number', '1', 'opts-minutesStep')
             p Шаг выбора минут.
 
+        .param
+            +param-header('container', 'HTMLElement', 'document.body', 'opts-container')
+            p Родительский DOM-элемент, внутри которого будет размещён календарь.
+
+        .param
+            +param-header('autoSize', 'boolean', 'false', 'opts-autoSize')
+            p Если установлено значение 'true', календарь автоматически подстроит свой размер под содержимое.
+
+        .param
+            +param-header('minDays', 'number', 'null', 'opts-minDays')
+            p Минимальное количество дней, которые можно выбрать за один раз (при выборе диапазона дат).
+
+        .param
+            +param-header('maxDays', 'number', 'null', 'opts-maxDays')
+            p Максимальное количество дней, которые можно выбрать за один раз (при выборе диапазона дат).
+
 
     article
         h2#events События

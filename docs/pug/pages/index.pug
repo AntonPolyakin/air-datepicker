@@ -823,6 +823,23 @@ block content
             +param-header('minutesStep', 'number', '1', 'opts-minutesStep')
             p Minutes step in slider.
 
+        .param
+            +param-header('container', 'HTMLElement', 'document.body', 'opts-container')
+            p The parent DOM element where the calendar will be placed.
+
+        .param
+            +param-header('autoSize', 'boolean', 'false', 'opts-autoSize')
+            p If set to 'true', the calendar will automatically adjust its size to fit the content.
+
+        .param
+            +param-header('minDays', 'number', 'null', 'opts-minDays')
+            p The minimum number of days that can be selected at once (when selecting a date range).
+
+        .param
+            +param-header('maxDays', 'number', 'null', 'opts-maxDays')
+            p The maximum number of days that can be selected at once (when selecting a date range).
+
+
     article
         h2#events Events
         .param
