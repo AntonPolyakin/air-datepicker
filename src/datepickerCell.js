@@ -94,10 +94,12 @@ export default class DatepickerCell {
 
         switch (this.type) {
             case consts.days:
+                const isTemporary = this.selected && this.dp._isDateTemporary(this.date);
                 classNameType = classNames({
                     '-weekend-': this.dp.isWeekend(day),
                     '-other-month-': this.isOtherMonth,
-                    '-disabled-': this.isOtherMonth && !selectOtherMonths || isOutOfMinMaxRange || isDisabled
+                    '-disabled-': this.isOtherMonth && !selectOtherMonths || isOutOfMinMaxRange || isDisabled,
+                    '-temporary-': isTemporary
                 });
                 break;
             case consts.months:
@@ -180,11 +182,28 @@ export default class DatepickerCell {
 
     select = () => {
         this.$cell.classList.add('-selected-');
+
+        // Adding the temporary class ONLY if the date is in temporaryDates
+        // and not in selectedDates (when includeTemporaryInSelected = false)
+        const isInTemporary = this.dp.temporaryDates.some(d =>
+            isSameDate(d, this.date)
+        );
+        const isInSelected = this.dp.selectedDates.some(d =>
+            isSameDate(d, this.date)
+        );
+
+        if (isInTemporary) {
+            this.$cell.classList.add('-temporary-');
+        } else {
+            // If the date is only in selectedDates, we remove the temporary class.-
+            this.$cell.classList.remove('-temporary-');
+        }
+
         this.selected = true;
     }
 
     removeSelect = () => {
-        this.$cell.classList.remove('-selected-', '-range-from-', '-range-to-');
+        this.$cell.classList.remove('-selected-', '-range-from-', '-range-to-', '-temporary-');
         this.selected = false;
     }
 
@@ -192,73 +211,164 @@ export default class DatepickerCell {
         const { maxDays, minDays } = this.opts;
         const { selectedDates, focusDate, rangeDateFrom, rangeDateTo } = this.dp;
         const selectedDatesLen = selectedDates.length;
-
         this.$cell.classList.remove('-range-from-', '-range-to-', '-in-range-');
-
         if (!selectedDatesLen) return;
 
         let from = rangeDateFrom;
         let to = rangeDateTo;
         let date = this.date;
         let type = this.type;
-
         const diff = dateDifference;
         const add = addDays;
         const bigger = isDateBigger;
         const less = isDateSmaller;
         const same = isSameDate;
 
-        // If only one date is selected and there is a focal date
+        // build virtual interval when only one selected and focus (hover) exists
+        let selectedDateIsBeforeFocus = null;
         if (selectedDatesLen === 1 && focusDate) {
             const selectedDate = selectedDates[0];
             const focusedDate = focusDate;
-            const selectedDateIsBeforeFocus = bigger(focusedDate, selectedDate);
+            selectedDateIsBeforeFocus = bigger(focusedDate, selectedDate); // true if selected < focus
 
-            // We define the start and end points of the time range
             from = selectedDateIsBeforeFocus ? selectedDate : focusedDate;
             to = selectedDateIsBeforeFocus ? focusedDate : selectedDate;
 
-            // We calculate the length of the desired range
             const desiredRangeLength = diff(to, from) + 1;
-
-            // Adjust the range according to the restrictions
             if (maxDays && desiredRangeLength > maxDays) {
-                // Limit by maxDays
                 if (selectedDateIsBeforeFocus) {
-                    // Focus to the right of the selected date
                     to = add(from, maxDays - 1);
                 } else {
-                    // Focus to the left of the selected date
                     from = add(to, -(maxDays - 1));
                 }
             } else if (minDays && desiredRangeLength < minDays) {
-                // Expanding to minDays
                 if (selectedDateIsBeforeFocus) {
-                    // Focus to the right of the selected date
                     to = add(from, minDays - 1);
                 } else {
-                    // Focus to the left of the selected date
                     from = add(to, -(minDays - 1));
                 }
             }
 
-            // If after adjusting we go beyond the focal date
-            // (for example, the focus was too far away and we truncated it by maxDays)
-            // we need to make sure the focal date is still within the range
-            // or at its boundary
-
-            // Calculate the final length of the range
             const finalRangeLength = diff(to, from) + 1;
-
-            // Let's check if it's possible to set a range of this length.
             if (minDays && finalRangeLength < minDays) {
-                // Cannot show range less than minDays
                 from = null;
                 to = null;
             } else if (maxDays && finalRangeLength > maxDays) {
-                // It is not possible to show a range greater than maxDays
                 from = null;
                 to = null;
+            }
+        }
+
+        let displayedFrom = from;
+        let displayedTo = to;
+
+        // If strict ranges required, compute blocked segments and clamp so that the final highlighted
+        // segment: a) doesn't contain disabled dates; b) still contains the originally selected date.
+        if (this.type === consts.days && this.dp.opts.nonStrictRanges === false && displayedFrom && displayedTo) {
+            // normalize interval
+            const start = new Date(Math.min(displayedFrom.getTime(), displayedTo.getTime()));
+            const end = new Date(Math.max(displayedFrom.getTime(), displayedTo.getTime()));
+
+            // collect disabled dates within [start, end] (as timestamps)
+            const disabledTimestamps = [];
+            for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+                if (this.dp.isDateDisabled(new Date(d))) {
+                    disabledTimestamps.push(new Date(d).setHours(0, 0, 0, 0));
+                }
+            }
+
+            const sel = selectedDates[0];
+
+            // if selected itself is disabled -> no highlight
+            if (this.dp.isDateDisabled(sel)) {
+                displayedFrom = null;
+                displayedTo = null;
+            } else {
+                // direction-aware clamping to produce continuous block that contains sel
+                if (selectedDateIsBeforeFocus === true) {
+                    // selected is left, focus is right: interval [selected .. focus]
+                    // we need first disabled >= selected (within interval) that sits to the right of selected
+                    const firstDisabled = disabledTimestamps.length ? Math.min(...disabledTimestamps) : null;
+                    if (firstDisabled !== null) {
+                        // if the first disabled is exactly at selected -> no highlight
+                        if (firstDisabled === new Date(sel).setHours(0, 0, 0, 0)) {
+                            displayedFrom = null;
+                            displayedTo = null;
+                        } else {
+                            const beforeDisabled = new Date(firstDisabled);
+                            beforeDisabled.setDate(beforeDisabled.getDate() - 1);
+                            // displayedFrom stays = selected, displayedTo becomes min(beforeDisabled, end)
+                            const newTo = beforeDisabled.getTime() < end.getTime() ? beforeDisabled : end;
+                            // ensure newTo >= selected
+                            if (newTo.getTime() < sel.getTime()) {
+                                displayedFrom = null;
+                                displayedTo = null;
+                            } else {
+                                displayedFrom = sel;
+                                displayedTo = newTo;
+                            }
+                        }
+                    } else {
+                        // no disabled inside interval -> keep as is
+                        displayedFrom = displayedFrom;
+                        displayedTo = displayedTo;
+                    }
+                } else if (selectedDateIsBeforeFocus === false) {
+                    // selected is right, focus is left: interval [focus .. selected]
+                    // we need last disabled <= selected (but >= start). Equivalent: find max disabled timestamp < = selected
+                    if (disabledTimestamps.length) {
+                        const selTs = new Date(sel).setHours(0, 0, 0, 0);
+                        // gather disabled <= selTs
+                        const leftDisabled = disabledTimestamps.filter(ts => ts <= selTs);
+                        const lastDisabled = leftDisabled.length ? Math.max(...leftDisabled) : null;
+                        if (lastDisabled !== null) {
+                            // if disabled equals selected -> no highlight
+                            if (lastDisabled === selTs) {
+                                displayedFrom = null;
+                                displayedTo = null;
+                            } else {
+                                const afterDisabled = new Date(lastDisabled);
+                                afterDisabled.setDate(afterDisabled.getDate() + 1);
+                                // displayedTo stays = selected, displayedFrom becomes max(afterDisabled, start)
+                                const newFrom = afterDisabled.getTime() > start.getTime() ? afterDisabled : start;
+                                if (newFrom.getTime() > sel.getTime()) {
+                                    displayedFrom = null;
+                                    displayedTo = null;
+                                } else {
+                                    displayedFrom = newFrom;
+                                    displayedTo = sel;
+                                }
+                            }
+                        } else {
+                            // no disabled on the left side within interval -> keep as is
+                            displayedFrom = displayedFrom;
+                            displayedTo = displayedTo;
+                        }
+                    } else {
+                        // no disabled -> keep as is
+                        displayedFrom = displayedFrom;
+                        displayedTo = displayedTo;
+                    }
+                } else {
+                    // no focus-direction info (shouldn't happen), leave as is
+                }
+            }
+        }
+
+        // after clamping, ensure the resulting block still satisfies minDays constraint
+        if (selectedDatesLen === 1 && displayedFrom && displayedTo) {
+            const dFrom = Math.min(displayedFrom.getTime(), displayedTo.getTime());
+            const dTo = Math.max(displayedFrom.getTime(), displayedTo.getTime());
+            const sel = selectedDates[0].getTime();
+            if (sel < dFrom || sel > dTo) {
+                displayedFrom = null;
+                displayedTo = null;
+            } else {
+                const finalLen = Math.floor((dTo - dFrom) / (24 * 3600 * 1000)) + 1;
+                if (minDays && finalLen < minDays) {
+                    displayedFrom = null;
+                    displayedTo = null;
+                }
             }
         }
 
@@ -268,29 +378,19 @@ export default class DatepickerCell {
             '-range-to-': false
         };
 
-        if (from && to) {
-            // Check if the current date is within the range
-            const isInRange = bigger(date, from) && less(date, to);
-
-            // Check if the current date is the start of a range
-            const isRangeFrom = same(date, from, type);
-
-            // Check if the current date is the end of a range
-            const isRangeTo = same(date, to, type);
-
-            // Installing classes
+        if (displayedFrom && displayedTo) {
+            const isInRange = bigger(date, displayedFrom) && less(date, displayedTo);
+            const isRangeFrom = same(date, displayedFrom, type);
+            const isRangeTo = same(date, displayedTo, type);
             classes['-in-range-'] = isInRange;
             classes['-range-from-'] = isRangeFrom;
             classes['-range-to-'] = isRangeTo;
-        } else if (from && !to) {
-            // Only the starting point is selected
-            classes['-range-from-'] = same(date, from, type);
-        } else if (!from && to) {
-            // Only the end point is selected
-            classes['-range-to-'] = same(date, to, type);
+        } else if (displayedFrom && !displayedTo) {
+            classes['-range-from-'] = same(date, displayedFrom, type);
+        } else if (!displayedFrom && displayedTo) {
+            classes['-range-to-'] = same(date, displayedTo, type);
         }
 
-        // Adding classes to an element
         Object.keys(classes).forEach(className => {
             if (classes[className]) {
                 this.$cell.classList.add(className);
@@ -298,11 +398,21 @@ export default class DatepickerCell {
         });
     }
 
+
     _handleSelectedStatus() {
-        let selected = this.dp._checkIfDateIsSelected(this.date, this.type);
-        if (selected) {
+        const isInSelected = this.dp.selectedDates.some(d =>
+            isSameDate(d, this.date, this.type)
+        );
+        const isInTemporary = this.dp.temporaryDates.some(d =>
+            isSameDate(d, this.date, this.type)
+        );
+
+        // The date is selected if it is in selectedDates OR in temporaryDates.
+        const isSelected = isInSelected || isInTemporary;
+
+        if (isSelected) {
             this.select();
-        } else if (!selected && this.selected) {
+        } else if (!isSelected && this.selected) {
             this.removeSelect();
         }
     }
@@ -321,12 +431,14 @@ export default class DatepickerCell {
     _handleClasses() {
         this.$cell.setAttribute('class', '');
         this._handleInitialFocusStatus();
-        if (this.dp.hasSelectedDates) {
+
+        if (this.dp.hasSelectedDates || this.dp.temporaryDates.length > 0) {
             this._handleSelectedStatus();
             if (this.dp.opts.range && this.type === consts.days) {
                 this._handleRangeStatus();
             }
         }
+
         this.$cell.classList.add(...this._getClassName());
     }
 
@@ -344,7 +456,6 @@ export default class DatepickerCell {
 
     onChangeSelectedDate = () => {
         if (this.isDisabled) return;
-
         this._handleSelectedStatus();
         if (this.dp.opts.range && this.type === consts.days) {
             this._handleRangeStatus();

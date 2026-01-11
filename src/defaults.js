@@ -78,4 +78,9 @@ export default {
     
     minDays: 1,
     maxDays: 0,
+
+    queueMode: false,
+    includeTemporaryInSelected: false,
+    allowExtendRange: true,
+    nonStrictRanges: false
 };

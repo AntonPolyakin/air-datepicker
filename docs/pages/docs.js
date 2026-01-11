@@ -412,6 +412,18 @@ function Docs({} = {}) {
                                 <Param name={'maxDays'} type={'number'} defaultValue={'0'}>
                                     <Paragraph id={'optsMaxDays'}/>
                                 </Param>
+                                <Param name={'queueMode'} type={'boolean'} defaultValue={'false'}>
+                                    <Paragraph id={'optsQueueMode'}/>
+                                </Param>
+                                <Param name={'includeTemporaryInSelected'} type={'boolean'} defaultValue={'false'}>
+                                    <Paragraph id={'optsIncludeTemporaryInSelected'}/>
+                                </Param>
+                                <Param name={'allowExtendRange'} type={'boolean'} defaultValue={'false'}>
+                                    <Paragraph id={'optsAllowExtendRange'}/>
+                                </Param>
+                                <Param name={'nonStrictRanges'} type={'boolean'} defaultValue={'false'}>
+                                    <Paragraph id={'optsNonStrictRanges'}/>
+                                </Param>
                             </Param.List>
                         </Section>
                         <Section title='localeTitle'>

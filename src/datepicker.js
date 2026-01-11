@@ -81,6 +81,7 @@ export default class Datepicker {
         this.customHide = false;
         this.currentView = view;
         this.selectedDates = [];
+        this.temporaryDates = [];
         this.disabledDates = new Set();
         this.isDestroyed = false;
         this.views = {};
@@ -88,7 +89,9 @@ export default class Datepicker {
         this.rangeDateFrom = '';
         this.rangeDateTo = '';
         this.timepickerIsActive = false; // Need when autoClose and timepicker are both true
+        this.queueMode = opts.queueMode;
         this.treatAsInline = this.opts.inline || !this.elIsInput;
+        this.allowExtendRange = this.opts.allowExtendRange;
 
         this.init();
     }
@@ -139,8 +142,13 @@ export default class Datepicker {
             }
         }
 
+        // In the Datepicker constructor, after initializing selectedDates
         if (selectedDates) {
             this.selectDate(selectedDates, { silent: true });
+            // Initialize the queue order with programmatically set dates
+            if (this.opts.queueMode) {
+                this.selectionOrder = [...this.selectedDates];
+            }
         }
 
         if (this.opts.visible && !treatAsInline) {
@@ -564,16 +572,19 @@ export default class Datepicker {
             autoClose,
             onBeforeSelect,
             minDays,
-            maxDays
+            maxDays,
+            includeTemporaryInSelected = true,
+            nonStrictRanges,
+            allowExtendRange
         } = this.opts;
-
-        // New variable for setting the second date from the range
-        if (this.allowExtendRange === undefined) {
-            this.allowExtendRange = true; // Default true
-        }
 
         const selectedDaysLen = selectedDates.length;
         let newViewDate;
+
+        // Initialize the selectionOrder if it does not exist
+        if (this.opts.queueMode && !this.selectionOrder) {
+            this.selectionOrder = [];
+        }
 
         if (Array.isArray(date)) {
             date.forEach((d) => {
@@ -587,12 +598,68 @@ export default class Datepicker {
         date = createDate(date);
         if (!(date instanceof Date)) return;
 
+        // helper: checks if there are disabled dates between a and b (inclusive)
+        const hasDisabledBetween = (a, b) => {
+            const start = new Date(Math.min(a.getTime(), b.getTime()));
+            const end = new Date(Math.max(a.getTime(), b.getTime()));
+            for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+                if (this.isDateDisabled(new Date(d))) return true;
+            }
+            return false;
+        };
+
+        // helper: if you need to get the closest valid date to desiredTarget that does not cross disabled,
+        // then we crop it: when moving to the right — up to the day before the first disabled; when moving to the left — up to the day after the first disabled.
+        // Returns either the adjusted date or null (if adjustments are not possible).
+        // Replace the old implementation with this one:
+        const clampTargetAvoidDisabled = (fromDate, desiredTarget) => {
+            if (!desiredTarget) return null;
+            // if there is no disabled in between, we return desiredTarget.
+            if (!hasDisabledBetween(fromDate, desiredTarget)) return desiredTarget;
+
+            // direction
+            const movingRight = desiredTarget.getTime() > fromDate.getTime();
+
+            if (movingRight) {
+                // we are looking for the first disabled, starting from the day after fromDate and moving to the right
+                for (let d = new Date(fromDate); d.getTime() <= desiredTarget.getTime(); d.setDate(d.getDate() + 1)) {
+                    // skip the fromDate itself (start from next day)
+                    if (d.getTime() === fromDate.getTime()) continue;
+                    if (this.isDateDisabled(new Date(d))) {
+                        // let's cut to the day before this disabled
+                        const beforeDisabled = new Date(d);
+                        beforeDisabled.setDate(beforeDisabled.getDate() - 1);
+                        if (beforeDisabled.getTime() <= fromDate.getTime()) return null;
+                        return beforeDisabled;
+                    }
+                }
+
+                return null;
+            } else {
+                // moving to the left: we search for the first disabled, starting from the day before fromDate and moving to the left
+                for (let d = new Date(fromDate); d.getTime() >= desiredTarget.getTime(); d.setDate(d.getDate() - 1)) {
+                    if (d.getTime() === fromDate.getTime()) continue;
+                    if (this.isDateDisabled(new Date(d))) {
+                        // let's cut to the day after this disabled
+                        const afterDisabled = new Date(d);
+                        afterDisabled.setDate(afterDisabled.getDate() + 1);
+                        if (afterDisabled.getTime() >= fromDate.getTime()) return null;
+                        return afterDisabled;
+                    }
+                }
+                return null;
+            }
+        };
+
+        // if strict ranges and the selected date are disabled, we block the selection.
+        if (!nonStrictRanges && this.isDateDisabled(date)) {
+            return Promise.resolve();
+        }
+
         if (onBeforeSelect && !silent && !onBeforeSelect({ date, datepicker: this })) {
             return Promise.resolve();
         }
 
-        // Checks if selected date is out of current month or decade
-        // If so, change `viewDate`
         if (currentView === consts.days) {
             if (date.getMonth() !== parsedViewDate.month && moveToOtherMonthsOnSelect) {
                 newViewDate = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -609,134 +676,203 @@ export default class Datepicker {
             this.setViewDate(newViewDate);
         }
 
+        let shouldAddToTemporary = false;
+
         if (multipleDates && !range) {
-            if (selectedDaysLen === multipleDates) return;
-            if (!this._checkIfDateIsSelected(date)) {
-                selectedDates.push(date);
+            const currentUniqueCount = this.uniqueSelectedCount;
+
+            if (maxDays && currentUniqueCount >= maxDays && !this.queueMode) {
+                return Promise.resolve();
+            }
+
+            if (selectedDaysLen === multipleDates && !this.queueMode) return;
+
+            const isAlreadySelected = this._checkIfDateIsSelected(date);
+
+            if (!isAlreadySelected) {
+                // queueMode Processing
+                if (maxDays && currentUniqueCount >= maxDays && this.queueMode) {
+                    // For queueMode, we use the selection order
+                    if (this.selectionOrder && this.selectionOrder.length > 0) {
+                        // We find the oldest date in the order of selection
+                        const oldestDate = this.selectionOrder[0];
+                        this.unselectDate(oldestDate, { silent: true });
+                    } else {
+                        // If there is no selection order, delete the earliest one in time.
+                        const allDates = this.getUniqueDates([...this.selectedDates, ...this.temporaryDates]);
+                        allDates.sort((a, b) => a.getTime() - b.getTime());
+                        if (allDates.length > 0) {
+                            const oldestDate = allDates[0];
+                            this.unselectDate(oldestDate, { silent: true });
+                        }
+                    }
+                }
+
+                // After the possible deletion of the old date, we check the status again.
+                const updatedUniqueCount = this.uniqueSelectedCount;
+                const willBeUniqueCount = updatedUniqueCount + 1;
+
+                if (minDays && willBeUniqueCount < minDays) {
+                    shouldAddToTemporary = true;
+                    if (includeTemporaryInSelected) {
+                        selectedDates.push(date);
+                        this.temporaryDates.push(date);
+                        // We add to the selection order if we include time dates
+                        if (this.queueMode && this.selectionOrder) {
+                            this.selectionOrder.push(date);
+                        }
+                    } else {
+                        this.temporaryDates.push(date);
+                        // For temporary dates, we do not add them to the selection order.
+                    }
+                } else {
+                    if (minDays && willBeUniqueCount >= minDays) {
+                        // Moving the time dates to the selected ones
+                        this.temporaryDates.forEach(tempDate => {
+                            if (!selectedDates.some(d => isSameDate(d, tempDate))) {
+                                selectedDates.push(tempDate);
+                                // Adding time dates to the order of selection during the transition
+                                if (this.queueMode && this.selectionOrder) {
+                                    this.selectionOrder.push(tempDate);
+                                }
+                            }
+                        });
+                        this.temporaryDates = [];
+                    }
+
+                    selectedDates.push(date);
+
+                    // Adding it to the selection order
+                    if (this.queueMode && this.selectionOrder) {
+                        this.selectionOrder.push(date);
+                    }
+                }
+            } else {
+                if (!includeTemporaryInSelected) {
+                    const tempIndex = this.temporaryDates.findIndex(d => isSameDate(d, date));
+                    if (tempIndex > -1) {
+                        this.unselectDate(date, params);
+                        return Promise.resolve();
+                    }
+                }
+                return Promise.resolve();
             }
         } else if (range) {
-            // For range: selectedDates always must be an array of 2 dates 
-            // [rangeDateFrom, rangeDateTo] - even if this is the same data
-
             switch (selectedDates.length) {
                 case 0:
-                    // No dates selected - starting a new range
                     this.rangeDateFrom = date;
                     this.rangeDateTo = null;
                     this.selectedDates = [date];
                     break;
-
                 case 1:
-                    // There is one selected date (start of range)
                     const firstDate = selectedDates[0];
-                    const isSameDay = isSameDate(date, firstDate);
 
-                    // Delete range by clicking on the same date again
+                    // if the ranges are strict, we forbid creating a range using disabled or with disabled borders.
+                    if (!nonStrictRanges) {
+                        if (this.isDateDisabled(firstDate) || this.isDateDisabled(date) || hasDisabledBetween(firstDate, date)) {
+                            // If auto—extension is prohibited, we don't do anything.
+                            if (!allowExtendRange) {
+                                return Promise.resolve();
+                            }
+                            // Let's try to crop the target date so that it doesn't cross disabled.
+                            // clampTargetAvoidDisabled returns null if adjustments are not possible.
+                            const clamped = clampTargetAvoidDisabled(firstDate, date);
+                            if (!clamped) {
+                                return Promise.resolve();
+                            }
+                            // we use the adjusted date and continue processing (including checking the min/max)
+                            date = clamped;
+                        }
+                    }
+
+                    const isSameDay = isSameDate(date, firstDate);
                     if (isSameDay) {
-                        // If minDays > 1, then always delete the range on the second click
                         if (minDays > 1) {
                             this.unselectDate(firstDate);
                             return Promise.resolve();
-                        }
-                        // If minDays = 1, check the state
-                        else if (minDays === 1) {
-                            // If the second date is already set (range of one date)
+                        } else if (minDays === 1) {
                             if (this.selectedDates.length === 2) {
-                                // Delete the entire range
                                 this.unselectDate(firstDate);
                                 if (this.selectedDates[1]) {
                                     this.unselectDate(this.selectedDates[1]);
                                 }
                                 return Promise.resolve();
                             } else {
-                                // Set a range of one date
                                 this.rangeDateTo = date;
                                 this.selectedDates = [firstDate, date];
                             }
                         }
                     } else {
-                        // Normal second date selection
                         const rangeLength = Math.abs(dateDifference(date, firstDate)) + 1;
-
-                        // Checking the minDays and maxDays limits
                         let isValidRange = true;
-
                         if (minDays && rangeLength < minDays) {
                             isValidRange = false;
                             if (!silent) {
                                 console.log(`The range should not be less than ${minDays} days`);
                             }
                         }
-
                         if (maxDays && rangeLength > maxDays) {
                             isValidRange = false;
                             if (!silent) {
                                 console.log(`The range should not exceed ${maxDays} days`);
                             }
                         }
-
                         if (!isValidRange) {
-                            // If allowExtendRange = true, we try to find the nearest valid date
-                            if (this.allowExtendRange && (rangeLength < minDays || rangeLength > maxDays)) {
-                                // We are looking for the nearest acceptable date in the desired direction
+                            if (allowExtendRange && (rangeLength < minDays || rangeLength > maxDays)) {
                                 let targetDate;
                                 const isSecondDateAfterFirst = isDateBigger(date, firstDate);
 
                                 if (rangeLength < minDays) {
-                                    // Need to increase range to minDays
                                     targetDate = isSecondDateAfterFirst
                                         ? addDays(firstDate, minDays - 1)
                                         : addDays(firstDate, -(minDays - 1));
                                 } else if (rangeLength > maxDays) {
-                                    // The range needs to be reduced to maxDays
                                     targetDate = isSecondDateAfterFirst
                                         ? addDays(firstDate, maxDays - 1)
                                         : addDays(firstDate, -(maxDays - 1));
                                 }
 
-                                // Check that targetDate is not equal to the current date
                                 if (targetDate && !isSameDate(targetDate, date)) {
-                                    return this.selectDate(targetDate, { ...params, silent: true });
+                                    // if the ranges are strict, we will try to trim the target, rather than immediately discard the selection.
+                                    if (!nonStrictRanges) {
+                                        if (this.isDateDisabled(firstDate) || this.isDateDisabled(date) || hasDisabledBetween(firstDate, date)) {
+                                            if (!allowExtendRange) {
+                                                return Promise.resolve();
+                                            }
+                                            // trying to crop the date (as the desired end)
+                                            const clamped = clampTargetAvoidDisabled(firstDate, date);
+                                            if (!clamped) return Promise.resolve();
+                                            date = clamped; // we use the cropped date as the selected one.
+                                        }
+                                    }
+
+                                    return this.selectDate(targetDate, { ...params });
                                 }
                             }
-
                             return Promise.resolve();
                         }
-
-                        // All checks have been passed, we are setting the second date
                         this.rangeDateTo = date;
-
-                        // Sort dates if the second date is earlier than the first.
                         if (isDateBigger(this.rangeDateFrom, this.rangeDateTo)) {
                             [this.rangeDateTo, this.rangeDateFrom] = [this.rangeDateFrom, this.rangeDateTo];
                         }
-
                         this.selectedDates = [this.rangeDateFrom, this.rangeDateTo];
                     }
                     break;
-
                 case 2:
-                    // There is already a full range
                     const isClickingOnFrom = isSameDate(date, this.rangeDateFrom);
                     const isClickingOnTo = isSameDate(date, this.rangeDateTo);
-
                     if (isClickingOnFrom || isClickingOnTo) {
-                        // Click on an existing date range
                         if (minDays === 1 && isSameDate(this.rangeDateFrom, this.rangeDateTo)) {
-                            // A range of one date - delete on the third click
                             this.unselectDate(this.rangeDateFrom);
                             this.unselectDate(this.rangeDateTo);
                         } else {
-                            // Range of different dates - delete and start a new one
                             this.unselectDate(this.rangeDateFrom);
                             this.unselectDate(this.rangeDateTo);
-                            // We start a new range from this date
                             this.rangeDateFrom = date;
                             this.rangeDateTo = null;
                             this.selectedDates = [date];
                         }
                     } else {
-                        // Click on another date to start a new range.
                         this.rangeDateFrom = date;
                         this.rangeDateTo = null;
                         this.selectedDates = [date];
@@ -744,15 +880,20 @@ export default class Datepicker {
                     break;
             }
         } else {
-            // No range mode
             this.selectedDates = [date];
+
+            // Adding it to the selection order
+            if (this.queueMode && this.selectionOrder) {
+                this.selectionOrder.push(date);
+            }
         }
 
         this.trigger(consts.eventChangeSelectedDate, {
             action: consts.actionSelectDate,
             silent: params?.silent,
             date,
-            updateTime
+            updateTime,
+            isTemporary: shouldAddToTemporary || false
         });
 
         this._updateLastSelectedDate(date);
@@ -776,7 +917,15 @@ export default class Datepicker {
         date = createDate(date);
         if (!(date instanceof Date)) return false;
 
-        const { minDays, maxDays, range } = _this.opts;
+        const { minDays, maxDays, range, includeTemporaryInSelected = true } = _this.opts;
+
+        // Removing it from the selection order
+        if (_this.queueMode && _this.selectionOrder) {
+            const orderIndex = _this.selectionOrder.findIndex(d => isSameDate(d, date));
+            if (orderIndex > -1) {
+                _this.selectionOrder.splice(orderIndex, 1);
+            }
+        }
 
         if (range) {
             // For range mode: remove the entire date from selectedDates
@@ -815,71 +964,84 @@ export default class Datepicker {
             });
             return true;
         } else {
-            // No range mode
-            return selectedDates.some(function (curDate, i) {
-                if (isSameDate(curDate, date)) {
-                    // if maxDays === 1 && range → remove both dates
-                    if (maxDays === 1 && range) {
-                        selectedDates.splice(i, 2);
-                    } else {
-                        selectedDates.splice(i, 1);
-                    }
+            const tempIndex = this.temporaryDates.findIndex(d => isSameDate(d, date));
+            const selectedIndex = selectedDates.findIndex(d => isSameDate(d, date));
+            let removed = false;
 
-                    // Apply minDays logic
-                    if (selectedDates.length >= minDays) {
-                        selectedDates = selectedDates.slice();
-                    } else {
-                        selectedDates = [];
-                    }
+            if (tempIndex > -1) {
+                this.temporaryDates.splice(tempIndex, 1);
+                removed = true;
+            }
+            if (selectedIndex > -1) {
+                selectedDates.splice(selectedIndex, 1);
+                removed = true;
+            }
 
-                    // Reset range & lastSelectedDate
-                    if (!selectedDates.length) {
-                        _this.rangeDateFrom = '';
-                        _this.rangeDateTo = '';
-                        _this._updateLastSelectedDate(false);
+            if (removed) {
+                const remainingUniqueCount = this.uniqueSelectedCount;
+                if (minDays && remainingUniqueCount < minDays) {
+                    if (includeTemporaryInSelected) {
+                        this.temporaryDates = [...selectedDates];
+                        // Updating the selection order for time dates
+                        if (this.queueMode && this.selectionOrder) {
+                            this.selectionOrder = [...selectedDates];
+                        }
                     } else {
-                        _this.rangeDateFrom = selectedDates[0] || '';
-                        _this.rangeDateTo =
-                            range && selectedDates.length > 1
-                                ? selectedDates[1]
-                                : '';
-                        _this._updateLastSelectedDate(
-                            selectedDates[selectedDates.length - 1]
-                        );
+                        this.temporaryDates.push(...selectedDates);
+                        selectedDates.length = 0;
+                        // Clearing the selection order since all dates are temporary
+                        if (this.queueMode && this.selectionOrder) {
+                            this.selectionOrder = [];
+                        }
                     }
-
-                    _this.trigger(consts.eventChangeSelectedDate, {
-                        action: consts.actionUnselectDate,
-                        date
-                    });
-                    return true;
                 }
-                return false;
-            });
+
+                this.trigger(consts.eventChangeSelectedDate, {
+                    action: consts.actionUnselectDate,
+                    date
+                });
+                return true;
+            }
+            return false;
         }
     }
 
     replaceDate(selectedDate, newDate) {
+        // Looking for a date in selectedDates
         let date = this.selectedDates.find((d) => {
             return isSameDate(d, selectedDate, this.currentView);
         });
-        let index = this.selectedDates.indexOf(date);
 
+        // If not found in selectedDates and includeTemporaryInSelected = false, we search in temporaryDates.
+        if (!date && !this.opts.includeTemporaryInSelected) {
+            const tempIndex = this.temporaryDates.findIndex(d =>
+                isSameDate(d, selectedDate, this.currentView)
+            );
+            if (tempIndex > -1) {
+                // Updating the date in temporaryDates
+                this.temporaryDates[tempIndex] = newDate;
+                this.trigger(consts.eventChangeSelectedDate, {
+                    action: consts.actionSelectDate,
+                    date: newDate,
+                    updateTime: true
+                });
+                return;
+            }
+        }
+
+        let index = this.selectedDates.indexOf(date);
         if (index < 0) return;
 
-        // Add check if same date exists, if so don't trigger change events
         if (isSameDate(this.selectedDates[index], newDate, this.currentView)) {
             return;
         }
 
         this.selectedDates[index] = newDate;
-
         this.trigger(consts.eventChangeSelectedDate, {
             action: consts.actionSelectDate,
             date: newDate,
             updateTime: true
         });
-
         this._updateLastSelectedDate(newDate);
     }
 
@@ -889,11 +1051,20 @@ export default class Datepicker {
      */
     clear(params = {}) {
         this.selectedDates = [];
+        this.temporaryDates = [];
         this.rangeDateFrom = false;
         this.rangeDateTo = false;
         this.lastSelectedDate = false;
 
-        this.trigger(consts.eventChangeSelectedDate, { action: consts.actionUnselectDate, silent: params.silent });
+        // Clearing the selection order
+        if (this.selectionOrder) {
+            this.selectionOrder = [];
+        }
+
+        this.trigger(consts.eventChangeSelectedDate, {
+            action: consts.actionUnselectDate,
+            silent: params.silent
+        });
 
         return new Promise((resolve) => {
             setTimeout(resolve);
@@ -1130,15 +1301,25 @@ export default class Datepicker {
      * @private
      */
     _checkIfDateIsSelected = (date, cellType = consts.days) => {
-        let alreadySelectedDate = false;
+        // Checking in selectedDates
+        for (const selectedDate of this.selectedDates) {
+            if (isSameDate(date, selectedDate, cellType)) {
+                return selectedDate;
+            }
+        }
 
-        this.selectedDates.some((selectedDate) => {
-            let same = isSameDate(date, selectedDate, cellType);
-            alreadySelectedDate = same && selectedDate;
-            return same;
-        });
+        // If includeTemporaryInSelected = false, we also check the temporaryDates
+        for (const tempDate of this.temporaryDates) {
+            if (isSameDate(date, tempDate, cellType)) {
+                return tempDate;
+            }
+        }
 
-        return alreadySelectedDate;
+        return false;
+    }
+
+    _isDateTemporary(date) {
+        return this.temporaryDates.some(d => isSameDate(d, date));
     }
 
     _handleAlreadySelectedDates(alreadySelectedDate, cellDate) {
@@ -1512,6 +1693,21 @@ export default class Datepicker {
     //  Utils
     // -------------------------------------------------
 
+    getUniqueDates(dates) {
+        const uniqueDates = [];
+        const seen = new Set();
+
+        for (const date of dates) {
+            const key = date.getTime();
+            if (!seen.has(key)) {
+                seen.add(key);
+                uniqueDates.push(date);
+            }
+        }
+
+        return uniqueDates;
+    }
+
     isOtherMonth = (date) => {
         let { month } = getParsedDate(date);
 
@@ -1635,6 +1831,10 @@ export default class Datepicker {
     //  Helpers
     // -------------------------------------------------
 
+    get uniqueSelectedCount() {
+        return this.getUniqueDates([...this.selectedDates, ...this.temporaryDates]).length;
+    }
+
     get shouldUpdateDOM() {
         return this.visible || this.treatAsInline;
     }
@@ -1660,7 +1860,7 @@ export default class Datepicker {
     }
 
     get hasSelectedDates() {
-        return this.selectedDates.length > 0;
+        return this.selectedDates.length > 0 || this.temporaryDates.length > 0;
     }
 
     get isMinViewReached() {

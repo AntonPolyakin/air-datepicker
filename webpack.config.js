@@ -44,7 +44,7 @@ let config = {
     entry: entry,
     devtool: dev ? 'eval-source-map' : false,
     optimization: {
-        minimize: false,
+        minimize: true,
     },
     output: {
         path: path.resolve(__dirname, 'dist'),
