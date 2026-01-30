@@ -12,7 +12,7 @@ var _default = exports.default = {
   monthsShort: ['Jan', 'Feb', 'Már', 'Ápr', 'Máj', 'Jún', 'Júl', 'Aug', 'Szep', 'Okt', 'Nov', 'Dec'],
   today: 'Ma',
   clear: 'Törlés',
-  dateFormat: 'yyyy-MM-dd',
+  dateFormat: 'YYYY-MM-DD',
   timeFormat: 'hh:mm aa',
   firstDay: 1
 };

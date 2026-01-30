@@ -1651,7 +1651,7 @@ export default class Datepicker {
             if (!trueDate) return;
             let method = _enable ? 'delete' : 'add';
 
-            this.disabledDates[method](this.formatDate(trueDate, 'yyyy-MM-dd'));
+            this.disabledDates[method](this.formatDate(trueDate, 'YYYY-MM-DD'));
             let cell = this.getCell(trueDate, this.currentViewSingular);
 
             if (!cell) return;
@@ -1674,7 +1674,7 @@ export default class Datepicker {
     isDateDisabled = (date) => {
         let trueDate = createDate(date);
 
-        return this.disabledDates.has(this.formatDate(trueDate, 'yyyy-MM-dd'));
+        return this.disabledDates.has(this.formatDate(trueDate, 'YYYY-MM-DD'));
     }
 
     _showMobileOverlay() {
